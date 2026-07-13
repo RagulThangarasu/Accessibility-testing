@@ -78,16 +78,60 @@ const SC_NAMES = {
   '4.1.3': 'Status Messages'
 };
 
+// Conformance level of each success criterion. This is what makes a report
+// actionable: Level A is the floor — a single Level A failure means the page is
+// not conformant at ANY level, including AA. Level AA failures block AA only.
+// (2.1-only criteria are included because a second engine can surface them even
+// though we filter axe to 2.0.)
+const SC_LEVELS = {
+  '1.1.1': 'A',
+  '1.2.1': 'A', '1.2.2': 'A', '1.2.3': 'A', '1.2.4': 'AA', '1.2.5': 'AA',
+  '1.3.1': 'A', '1.3.2': 'A', '1.3.3': 'A', '1.3.4': 'AA', '1.3.5': 'AA',
+  '1.4.1': 'A', '1.4.2': 'A', '1.4.3': 'AA', '1.4.4': 'AA', '1.4.5': 'AA',
+  '1.4.10': 'AA', '1.4.11': 'AA', '1.4.12': 'AA', '1.4.13': 'AA',
+  '2.1.1': 'A', '2.1.2': 'A', '2.1.4': 'A',
+  '2.2.1': 'A', '2.2.2': 'A',
+  '2.3.1': 'A',
+  '2.4.1': 'A', '2.4.2': 'A', '2.4.3': 'A', '2.4.4': 'A',
+  '2.4.5': 'AA', '2.4.6': 'AA', '2.4.7': 'AA',
+  '2.5.1': 'A', '2.5.2': 'A', '2.5.3': 'A', '2.5.4': 'A',
+  '3.1.1': 'A', '3.1.2': 'AA',
+  '3.2.1': 'A', '3.2.2': 'A', '3.2.3': 'AA', '3.2.4': 'AA',
+  '3.3.1': 'A', '3.3.2': 'A', '3.3.3': 'AA', '3.3.4': 'AA',
+  '4.1.1': 'A', '4.1.2': 'A', '4.1.3': 'AA'
+};
+
 export function scName(sc) {
   return SC_NAMES[sc] || '';
+}
+
+/** 'A', 'AA', or '' when the finding maps to no success criterion. */
+export function scLevel(sc) {
+  return SC_LEVELS[sc] || '';
 }
 
 // ---------------------------------------------------------------------------
 // Engine 2 — HTML_CodeSniffer (WCAG2AA standard)
 // ---------------------------------------------------------------------------
 
+/**
+ * HTML_CodeSniffer works by injecting itself into the page, which a strict
+ * Content-Security-Policy will block outright. That is the site's prerogative,
+ * not an error on our side — so a blocked injection loses this one engine's
+ * findings and nothing else. The other four still ran.
+ */
 export async function runHtmlcs(page) {
-  await page.addScriptTag({ path: HTMLCS_PATH });
+  try {
+    await page.addScriptTag({ path: HTMLCS_PATH });
+  } catch (err) {
+    console.warn(
+      `HTML_CodeSniffer could not run on this page (${
+        /Content Security Policy/i.test(err.message) ? 'blocked by the site\'s CSP' : err.message
+      }). Continuing with the other engines.`
+    );
+    return [];
+  }
+
   return page.evaluate(
     () =>
       new Promise((resolve) => {

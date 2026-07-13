@@ -32,16 +32,72 @@
         <input type="checkbox" id="sitemap" />
         Crawl the whole site from its sitemap
       </label>
-      <label class="opt" id="limit-wrap" hidden>
-        Max pages
-        <select id="limit">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
-        </select>
+      <label class="opt">
+        <input type="checkbox" id="use-ai" />
+        Validate with Claude AI
       </label>
     </div>
+
+    <!-- Sitemap panel: auto-discovery by default, with an escape hatch for
+         sites whose sitemap lives somewhere non-standard. -->
+    <fieldset class="panel" id="sitemap-panel" hidden>
+      <legend>Sitemap</legend>
+
+      <div class="row">
+        <label class="opt">
+          <input type="radio" name="sitemap-src" value="auto" checked />
+          Find it automatically <span class="hint">(robots.txt, /sitemap.xml, …)</span>
+        </label>
+        <label class="opt">
+          <input type="radio" name="sitemap-src" value="url" />
+          Use this sitemap URL
+        </label>
+        <label class="opt">
+          <input type="radio" name="sitemap-src" value="file" />
+          Upload a sitemap file
+        </label>
+      </div>
+
+      <div class="row" id="sitemap-url-row" hidden>
+        <input type="text" id="sitemap-url" class="field"
+               placeholder="https://example.com/sitemap.xml" autocomplete="off" />
+      </div>
+
+      <div class="row" id="sitemap-file-row" hidden>
+        <input type="file" id="sitemap-file" accept=".xml,.txt,text/xml,application/xml,text/plain" />
+        <span class="hint" id="sitemap-file-note"></span>
+      </div>
+
+      <div class="row">
+        <label class="opt">
+          Max pages
+          <select id="limit">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+      </div>
+    </fieldset>
+
+    <!-- Claude panel: the key is validated before any scan starts, so a bad key
+         fails in a second instead of after a ten-minute crawl. -->
+    <fieldset class="panel" id="ai-panel" hidden>
+      <legend>Claude API key</legend>
+
+      <div class="row">
+        <input type="password" id="api-key" class="field"
+               placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+        <button type="button" id="validate-key" class="btn">Validate key</button>
+      </div>
+
+      <p class="hint" id="key-status">
+        Claude reviews the 23 WCAG criteria automated engines cannot decide.
+        The key is used for this scan only — it is never stored or logged.
+      </p>
+    </fieldset>
 
     <section id="status" class="status hidden"></section>
 
@@ -57,6 +113,7 @@
         </div>
       </div>
 
+      <div id="verdict" class="verdict hidden"></div>
       <div class="cards" id="cards"></div>
       <p id="ai-note" class="ai-note hidden"></p>
       <div id="issues" class="issues hidden"></div>

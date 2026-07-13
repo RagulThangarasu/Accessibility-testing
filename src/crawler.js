@@ -27,9 +27,19 @@ function aggregate(pages) {
     review: 0,
     affectedElements: 0,
     byImpact: { critical: 0, serious: 0, moderate: 0, minor: 0 },
+    byLevel: { A: { violations: 0, review: 0 }, AA: { violations: 0, review: 0 } },
+    conformance: 'no-failures',
     byEngine: {},
     passes: 0,
-    ai: { checked: 0, passed: 0, notApplicable: 0, flagged: 0, skipped: null }
+    ai: {
+      checked: 0,
+      passed: 0,
+      notApplicable: 0,
+      flagged: 0,
+      resolved: 0,
+      lowConfidence: 0,
+      skipped: null
+    }
   };
 
   const issues = new Map();
@@ -42,6 +52,10 @@ function aggregate(pages) {
     totals.affectedElements += s.affectedElements;
     totals.passes += s.passes;
     for (const k of Object.keys(totals.byImpact)) totals.byImpact[k] += s.byImpact[k];
+    for (const level of ['A', 'AA']) {
+      totals.byLevel[level].violations += s.byLevel[level].violations;
+      totals.byLevel[level].review += s.byLevel[level].review;
+    }
     for (const [engine, n] of Object.entries(s.byEngine)) {
       totals.byEngine[engine] = (totals.byEngine[engine] || 0) + n;
     }
@@ -53,6 +67,8 @@ function aggregate(pages) {
       totals.ai.passed += s.ai.passed;
       totals.ai.notApplicable += s.ai.notApplicable;
       totals.ai.flagged += s.ai.findings.length;
+      totals.ai.resolved += s.ai.resolved || 0;
+      totals.ai.lowConfidence += s.ai.lowConfidence || 0;
     }
 
     for (const f of page.findings) {
@@ -63,6 +79,7 @@ function aggregate(pages) {
           ruleId: f.ruleId,
           engine: f.engine,
           sc: f.sc,
+          level: f.level,
           scLabel: f.sc ? `${f.sc} — ${scName(f.sc) || 'unnamed'}` : 'Not mapped',
           title: f.title,
           status: f.status,
@@ -85,12 +102,23 @@ function aggregate(pages) {
     totals.ai.skipped = [...skipReasons].join('; ');
   }
 
+  totals.conformance = totals.byLevel.A.violations
+    ? 'fails-a'
+    : totals.byLevel.AA.violations
+      ? 'fails-aa'
+      : 'no-failures';
+
+  // Severity first, then Level A ahead of AA, then reach. A Level A issue on 3
+  // pages outranks a Level AA issue on 8: the former is what makes the site
+  // non-conformant at all.
   const order = ['critical', 'serious', 'moderate', 'minor', 'review'];
+  const levelRank = (l) => (l === 'A' ? 0 : l === 'AA' ? 1 : 2);
   const ranked = [...issues.values()].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'violation' ? -1 : 1;
-    const ai = order.indexOf(a.impact);
-    const bi = order.indexOf(b.impact);
-    if (ai !== bi) return ai - bi;
+    const oi = order.indexOf(a.impact) - order.indexOf(b.impact);
+    if (oi !== 0) return oi;
+    const li = levelRank(a.level) - levelRank(b.level);
+    if (li !== 0) return li;
     return b.pages.length - a.pages.length;
   });
 
@@ -112,14 +140,20 @@ async function pool(items, n, task) {
 }
 
 /**
- * Find the site's sitemap, then scan every page it lists (up to `limit`).
+ * Scan every page a site's sitemap lists (up to `limit`).
+ *
+ * The sitemap comes from one of three places, in priority order: an uploaded
+ * file (`sitemapXml`), an explicit URL (`sitemapUrl`), or auto-discovery via
+ * robots.txt and the conventional paths. Supplying it directly is the escape
+ * hatch for sites whose sitemap lives somewhere non-standard.
  *
  * A page that fails to load is recorded in `failed` and the crawl continues —
  * one dead URL in a sitemap must not throw away the pages already scanned.
  *
  * @param {string} startUrl any URL on the site; its origin is what gets crawled.
- * @param {object} options `limit`, `concurrency`, `ai`, `onProgress`.
- * @returns {Promise<object>} site scan, or `{ error }` if there is no sitemap.
+ * @param {object} options `limit`, `concurrency`, `ai`, `apiKey`, `sitemapUrl`,
+ *   `sitemapXml`, `onProgress`.
+ * @returns {Promise<object>} site scan, or `{ error }` if no sitemap yields pages.
  */
 export async function scanSitemap(startUrl, options = {}) {
   const limit = Math.min(Math.max(1, options.limit || DEFAULT_PAGE_LIMIT), MAX_PAGE_LIMIT);
@@ -127,17 +161,41 @@ export async function scanSitemap(startUrl, options = {}) {
   const onProgress = options.onProgress || (() => {});
   const origin = new URL(startUrl).origin;
 
-  const sitemaps = await discoverSitemaps(startUrl);
-  if (!sitemaps.length) {
-    return {
-      error:
-        `No sitemap found for ${origin}. Looked in robots.txt and at the ` +
-        `conventional locations (/sitemap.xml, /sitemap_index.xml, …).`
-    };
+  const inlineXml = options.sitemapXml?.trim() || null;
+  if (inlineXml && !/<(urlset|sitemapindex)\b/i.test(inlineXml) && !/https?:\/\//.test(inlineXml)) {
+    return { error: 'That file is not a sitemap — it has no <urlset>, <sitemapindex>, or URLs in it.' };
   }
 
-  const { urls, total, sources } = await collectSitemapUrls(sitemaps, { origin, limit });
+  let sitemaps = [];
+  if (!inlineXml) {
+    sitemaps = options.sitemapUrl ? [options.sitemapUrl] : await discoverSitemaps(startUrl);
+    if (!sitemaps.length) {
+      return {
+        error:
+          `No sitemap found for ${origin}. Looked in robots.txt and at the ` +
+          `conventional locations (/sitemap.xml, /sitemap_index.xml, …). ` +
+          `If the site has one elsewhere, give its URL or upload the file.`
+      };
+    }
+  }
+
+  const { urls, total, sources, offOrigin } = await collectSitemapUrls(sitemaps, {
+    origin,
+    limit,
+    inlineXml
+  });
+
   if (!urls.length) {
+    // The commonest cause of an empty result on a supplied sitemap: it belongs
+    // to a different site than the URL that was typed. Say that outright rather
+    // than reporting a bare "no pages".
+    if (offOrigin) {
+      return {
+        error:
+          `That sitemap lists ${offOrigin} page${offOrigin === 1 ? '' : 's'}, but none on ` +
+          `${origin}. Check that the sitemap and the URL are for the same site.`
+      };
+    }
     return { error: `The sitemap for ${origin} lists no pages on this origin.` };
   }
 
@@ -149,7 +207,10 @@ export async function scanSitemap(startUrl, options = {}) {
   try {
     await pool(urls, concurrency, async (url) => {
       try {
-        const scan = await scanWithBrowser(browser, url, { ai: options.ai });
+        const scan = await scanWithBrowser(browser, url, {
+          ai: options.ai,
+          apiKey: options.apiKey
+        });
         pages.push({ ...scan, summary: summarize(scan) });
       } catch (err) {
         failed.push({ url, error: err.message });

@@ -101,24 +101,32 @@ export async function discoverSitemaps(pageUrl) {
  * Only same-origin URLs are kept: a scan is scoped to one site, and following
  * a sitemap off-origin would silently audit somebody else's pages.
  *
- * @returns {Promise<{urls: string[], total: number, sources: string[]}>}
- *   `urls` is capped at `limit`; `total` is how many were found before the cap.
+ * @param {string[]} sitemapUrls sitemaps to fetch and walk.
+ * @param {object} options `origin`, `limit`, and `inlineXml` — the contents of an
+ *   uploaded sitemap file, walked as if it had been fetched. Indexes inside it
+ *   are still followed over the network.
+ * @returns {Promise<{urls: string[], total: number, sources: string[], offOrigin: number}>}
+ *   `urls` is capped at `limit`; `total` is how many were found before the cap;
+ *   `offOrigin` counts URLs dropped for belonging to another site.
  */
-export async function collectSitemapUrls(sitemapUrls, { origin, limit = 10 } = {}) {
+export async function collectSitemapUrls(sitemapUrls, { origin, limit = 10, inlineXml } = {}) {
   const seen = new Set();
   const found = [];
   const sources = [];
   const visited = new Set();
+  let offOrigin = 0;
 
-  async function walk(sitemapUrl, depth) {
+  async function walk(sitemapUrl, depth, preloaded) {
     if (depth > MAX_DEPTH || visited.has(sitemapUrl)) return;
     visited.add(sitemapUrl);
 
-    let xml;
-    try {
-      xml = await fetchText(sitemapUrl);
-    } catch {
-      return; // a dead sitemap entry shouldn't abort the others
+    let xml = preloaded;
+    if (xml == null) {
+      try {
+        xml = await fetchText(sitemapUrl);
+      } catch {
+        return; // a dead sitemap entry shouldn't abort the others
+      }
     }
     sources.push(sitemapUrl);
 
@@ -143,7 +151,10 @@ export async function collectSitemapUrls(sitemapUrls, { origin, limit = 10 } = {
       let normalized;
       try {
         const u = new URL(loc);
-        if (origin && u.origin !== origin) continue;
+        if (origin && u.origin !== origin) {
+          offOrigin++;
+          continue;
+        }
         u.hash = '';
         normalized = u.href;
       } catch {
@@ -155,7 +166,10 @@ export async function collectSitemapUrls(sitemapUrls, { origin, limit = 10 } = {
     }
   }
 
+  if (inlineXml != null) {
+    await walk('(uploaded sitemap)', 0, inlineXml);
+  }
   for (const url of sitemapUrls) await walk(url, 0);
 
-  return { urls: found.slice(0, limit), total: found.length, sources };
+  return { urls: found.slice(0, limit), total: found.length, sources, offOrigin };
 }

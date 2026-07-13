@@ -161,7 +161,49 @@ body.scanning .hero { display: none; }
   font: inherit;
 }
 
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 18px 16px;
+  margin-top: 14px;
+}
+.panel legend { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px; }
+.panel .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.panel .field {
+  flex: 1;
+  min-width: 220px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.panel .hint { font-size: 12.5px; color: var(--muted); }
+.panel .hint.ok { color: #1b5e35; font-weight: 600; }
+.panel .hint.bad { color: #b00020; font-weight: 600; }
+#key-status { margin: 12px 0 0; }
+
 .loading-note { margin: 12px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+
+.verdict {
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  border: 1px solid;
+}
+.verdict h3 { margin: 0 0 4px; font-size: 16px; }
+.verdict p { margin: 0; font-size: 13.5px; }
+.verdict-fail { background: #fdecef; border-color: #f3c2cc; color: #7a0016; }
+.verdict-partial { background: #fff6e5; border-color: #f0d9a8; color: #7a5600; }
+.verdict-pass { background: #e7f6ec; border-color: #b6e0c4; color: #1b5e35; }
+
+.lvl { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.lvl-a { background: #7a0016; color: #fff; }
+.lvl-aa { background: #1d4ed8; color: #fff; }
+.lvl-none { background: var(--line); color: var(--muted); }
+
+.card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.muted { color: var(--muted); font-weight: 400; font-size: 12.5px; }
 
 .issues { margin-top: 22px; }
 .issues h3 { font-size: 16px; margin: 0 0 10px; }

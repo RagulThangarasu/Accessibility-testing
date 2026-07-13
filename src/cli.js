@@ -71,17 +71,28 @@ async function writeReports(html, base) {
   }
 }
 
-function printAi(ai, scope) {
+function printAi(ai, scope, remainingReview = 0) {
   if (ai?.skipped) {
     console.log(`\nClaude review skipped: ${ai.skipped}`);
-    console.log('Criteria needing human judgment were not assessed.');
-  } else if (ai) {
-    const flagged = ai.flagged ?? ai.findings.length;
-    console.log(
-      `\nClaude reviewed ${ai.checked} judgment-based criteria${scope}: ` +
-        `${flagged} flagged, ${ai.passed} passed, ${ai.notApplicable} n/a`
-    );
+    console.log('Anything the engines could not settle is left as "needs review".');
+    return;
   }
+  if (!ai) return;
+
+  const flagged = ai.flagged ?? ai.findings.length;
+  console.log(`\nClaude verdict on all ${ai.checked} WCAG 2.0 AA criteria${scope}`);
+  console.log(`  failed          : ${flagged}`);
+  console.log(`  passed          : ${ai.passed}`);
+  console.log(`  not applicable  : ${ai.notApplicable}`);
+  console.log(`  settled for the engines: ${ai.resolved || 0}`);
+  if (ai.lowConfidence) {
+    console.log(`  low confidence  : ${ai.lowConfidence} (worth checking by hand)`);
+  }
+  console.log(
+    remainingReview > 0
+      ? `  still needs a human: ${remainingReview}`
+      : '  nothing left for a human to triage'
+  );
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -129,13 +140,13 @@ if (sitemapMode) {
     }
   }
 
-  printAi(t.ai, ' across the site');
+  printAi(t.ai, ' across the site', t.review);
   await writeReports(generateSiteReportHtml(site), `${slugify(url)}-site-${stamp}`);
 } else {
   console.log(`\nScanning ${url}`);
   console.log(`Standard: ${WCAG_LEVEL_LABEL}`);
   console.log(
-    `Engines : axe-core, HTML_CodeSniffer, html-validate, custom checks${useAi ? ', Claude' : ''}\n`
+    `Engines : axe-core, Siteimprove Alfa, HTML_CodeSniffer, html-validate, interaction checks${useAi ? ', Claude' : ''}\n`
   );
 
   const scan = await scanUrl(url, { ai: useAi });
@@ -158,6 +169,6 @@ if (sitemapMode) {
   }
   console.log('───────────────────────────────');
 
-  printAi(summary.ai, '');
+  printAi(summary.ai, '', summary.review);
   await writeReports(generateReportHtml(scan), `${slugify(url)}-${stamp}`);
 }

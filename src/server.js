@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { scanUrl, summarize } from './scanner.js';
 import { scanSitemap, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './crawler.js';
+import { validateApiKey } from './ai-review.js';
 import { generateReportHtml, generateSiteReportHtml, htmlToPdf } from './report.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,9 +17,19 @@ const REPORTS_DIR = path.join(ROOT, 'reports');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+// An uploaded sitemap is posted as a JSON string, and sitemaps for large sites
+// run to megabytes — the 100kb express default would reject them.
+app.use(express.json({ limit: '25mb' }));
 app.use(express.static(PUBLIC_DIR));
 app.use('/reports', express.static(REPORTS_DIR));
+
+// Read the request's Claude options. A key sent from the browser is used for
+// that request only: it is never written to disk and never logged.
+function aiOptions(body) {
+  const apiKey = String(body?.apiKey || '').trim();
+  const ai = body?.ai !== false && Boolean(apiKey || process.env.ANTHROPIC_API_KEY);
+  return { ai, apiKey: apiKey || undefined };
+}
 
 function normalizeUrl(input) {
   let u = String(input || '').trim();
@@ -56,7 +67,7 @@ app.post('/api/scan', async (req, res) => {
   }
 
   try {
-    const scan = await scanUrl(url);
+    const scan = await scanUrl(url, aiOptions(req.body));
     const summary = summarize(scan);
 
     const html = generateReportHtml(scan);
@@ -112,7 +123,12 @@ app.post('/api/scan-site', async (req, res) => {
   );
 
   try {
-    const site = await scanSitemap(url, { limit, ai: req.body?.ai !== false });
+    const site = await scanSitemap(url, {
+      limit,
+      ...aiOptions(req.body),
+      sitemapUrl: req.body?.sitemapUrl?.trim() || undefined,
+      sitemapXml: req.body?.sitemapXml || undefined
+    });
 
     // No sitemap is a normal outcome for many sites, not a server fault — say
     // so plainly instead of dressing it up as a 500.
@@ -156,6 +172,7 @@ app.post('/api/scan-site', async (req, res) => {
       issues: site.issues.map((i) => ({
         title: i.title,
         scLabel: i.scLabel,
+        level: i.level,
         impact: i.impact,
         status: i.status,
         pages: i.pages.length,
@@ -168,6 +185,19 @@ app.post('/api/scan-site', async (req, res) => {
     console.error('Site scan failed:', err);
     res.status(500).json({ error: `Site scan failed: ${err.message}` });
   }
+});
+
+// Check a key before a scan runs. This costs no tokens, so the user learns a key
+// is bad in a second rather than after a ten-minute crawl.
+app.post('/api/validate-key', async (req, res) => {
+  const result = await validateApiKey(req.body?.apiKey);
+  res.status(result.ok ? 200 : 400).json(result);
+});
+
+// Lets the UI say whether the server already has a key, so the user knows the
+// field is optional rather than guessing.
+app.get('/api/config', (req, res) => {
+  res.json({ hasServerKey: Boolean(process.env.ANTHROPIC_API_KEY) });
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
