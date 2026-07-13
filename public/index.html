@@ -27,6 +27,22 @@
       <button id="scan-btn" type="submit">Validate</button>
     </form>
 
+    <div class="scan-options">
+      <label class="opt">
+        <input type="checkbox" id="sitemap" />
+        Crawl the whole site from its sitemap
+      </label>
+      <label class="opt" id="limit-wrap" hidden>
+        Max pages
+        <select id="limit">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+      </label>
+    </div>
+
     <section id="status" class="status hidden"></section>
 
     <section id="results" class="results hidden">
@@ -36,11 +52,14 @@
           <a id="result-url" class="result-url" href="#" target="_blank" rel="noopener"></a>
         </div>
         <div class="result-actions">
-          <a id="download-pdf" class="btn btn-primary" target="_blank" rel="noopener">Download Enhanced PDF</a>
+          <a id="download-html" class="btn" target="_blank" rel="noopener">View HTML report</a>
+          <a id="download-pdf" class="btn btn-primary" target="_blank" rel="noopener">Download PDF</a>
         </div>
       </div>
 
       <div class="cards" id="cards"></div>
+      <p id="ai-note" class="ai-note hidden"></p>
+      <div id="issues" class="issues hidden"></div>
     </section>
   </main>
 

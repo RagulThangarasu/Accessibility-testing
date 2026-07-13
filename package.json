@@ -4,10 +4,11 @@
   "description": "Enter any URL, scan it for WCAG 2.0 AA accessibility issues, and generate an HTML/PDF report.",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "scan": "node src/cli.js"
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "scan": "node --env-file-if-exists=.env src/cli.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@axe-core/playwright": "^4.10.1",
     "express": "^4.21.2",
     "html_codesniffer": "^2.5.1",

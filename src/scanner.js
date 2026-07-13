@@ -10,21 +10,25 @@ import {
   scFromAxeTags
 } from './engines.js';
 import { fillGuidance } from './guidance.js';
+import { runClaudeReview, AI_ENGINE } from './ai-review.js';
 
 // WCAG 2.0 AA = axe-core tags "wcag2a" (Level A) + "wcag2aa" (Level AA).
 export const WCAG_20_AA_TAGS = ['wcag2a', 'wcag2aa'];
 export const DEFAULT_TAGS = [...WCAG_20_AA_TAGS];
 export const WCAG_LEVEL_LABEL = 'WCAG 2.0 AA';
-export const ENGINES = ['axe-core', 'HTML_CodeSniffer', 'html-validate', 'checks'];
+export const ENGINES = ['axe-core', 'HTML_CodeSniffer', 'html-validate', 'checks', AI_ENGINE];
 
 // Engines overlap heavily — axe-core and HTML_CodeSniffer in particular flag the
 // same WCAG criterion on the same element. This priority decides which engine's
 // version of a duplicated finding is kept (lower number = more authoritative).
+// Claude is last: it reviews what the rule engines cannot decide, so where it
+// does overlap one of them, the deterministic engine's version wins.
 const ENGINE_PRIORITY = {
   'axe-core': 0,
   'HTML_CodeSniffer': 1,
   'html-validate': 2,
-  'checks': 3
+  'checks': 3,
+  [AI_ENGINE]: 4
 };
 
 function normHtml(html = '') {
@@ -110,24 +114,32 @@ function normalizeAxe(results) {
   ];
 }
 
+export function launchBrowser() {
+  return chromium.launch({ headless: true });
+}
+
 /**
- * Scan a URL with four engines (axe-core, HTML_CodeSniffer, html-validate,
- * plus extra DOM checks), all filtered/oriented to WCAG 2.0 AA.
+ * Scan one URL using an already-running browser.
+ *
+ * A sitemap crawl scans many pages in a row; launching Chromium per page would
+ * dominate the run time, so the crawler owns the browser and passes it in here.
+ * Each page still gets its own context, so no cookies or storage leak between
+ * pages.
  *
  * @returns {Promise<object>} combined, normalized scan result.
  */
-export async function scanUrl(url, options = {}) {
+export async function scanWithBrowser(browser, url, options = {}) {
   const tags = options.tags || DEFAULT_TAGS;
   const timeout = options.timeout || 60000;
 
-  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    viewport: { width: 1366, height: 900 },
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  });
+
   try {
-    const context = await browser.newContext({
-      viewport: { width: 1366, height: 900 },
-      userAgent:
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
     const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
@@ -144,13 +156,23 @@ export async function scanUrl(url, options = {}) {
     const hvReport = await runHtmlValidate(html);
     const htmlcsRaw = await runHtmlcs(page);
 
+    const engineFindings = [
+      ...normalizeAxe(axeResults),
+      ...normalizeHtmlcs(htmlcsRaw),
+      ...normalizeHtmlValidate(hvReport),
+      ...normalizeExtraChecks(extraRaw)
+    ];
+
+    // Claude runs last and is told what the rule engines already caught, so it
+    // spends its judgment on the criteria they cannot decide. A crawl can turn
+    // it off — one API call per page adds up across a large sitemap.
+    const aiReview =
+      options.ai === false
+        ? { findings: [], checked: 0, passed: 0, notApplicable: 0, skipped: 'AI review disabled' }
+        : await runClaudeReview({ url: finalUrl, title, html, findings: engineFindings });
+
     const findings = dedupeFindings(
-      [
-        ...normalizeAxe(axeResults),
-        ...normalizeHtmlcs(htmlcsRaw),
-        ...normalizeHtmlValidate(hvReport),
-        ...normalizeExtraChecks(extraRaw)
-      ].map((f) => {
+      [...engineFindings, ...aiReview.findings].map((f) => {
         const g = fillGuidance(f);
         return { ...f, description: g.description, fix: g.fix };
       })
@@ -164,8 +186,21 @@ export async function scanUrl(url, options = {}) {
       engines: ENGINES,
       generatedAt: new Date().toISOString(),
       findings,
+      aiReview,
       axePasses: axeResults.passes.length
     };
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * Scan a single URL, launching and disposing of a browser for it.
+ */
+export async function scanUrl(url, options = {}) {
+  const browser = await launchBrowser();
+  try {
+    return await scanWithBrowser(browser, url, options);
   } finally {
     await browser.close();
   }
@@ -198,6 +233,7 @@ export function summarize(scan) {
     affectedElements,
     byImpact,
     byEngine,
-    passes: scan.axePasses
+    passes: scan.axePasses,
+    ai: scan.aiReview || null
   };
 }

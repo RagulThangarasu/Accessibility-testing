@@ -138,4 +138,49 @@ body.scanning .hero { display: none; }
 .card .num { font-size: 30px; font-weight: 700; }
 .card .label { color: var(--muted); font-size: 13px; margin-top: 4px; text-transform: capitalize; }
 
+.scan-options {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.scan-options .opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scan-options select {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+}
+
+.loading-note { margin: 12px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+
+.issues { margin-top: 22px; }
+.issues h3 { font-size: 16px; margin: 0 0 10px; }
+.issue-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 13.5px; }
+.issue-table th { text-align: left; background: #f0f1f6; padding: 10px 12px; font-size: 12px; color: var(--muted); }
+.issue-table td { padding: 10px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+.issue-table .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.issue-table .reach { white-space: nowrap; }
+.issue-table .pill { color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 3px 7px; border-radius: 5px; white-space: nowrap; }
+
+.ai-note {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #d7d2ff;
+  border-left: 4px solid #7c3aed;
+  background: #f3f2ff;
+  font-size: 13.5px;
+}
+.ai-note.off { background: #fff6e5; border-color: #f0d9a8; border-left-color: #c79100; }
+
 .hidden { display: none !important; }
