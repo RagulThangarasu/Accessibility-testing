@@ -1,126 +1,99 @@
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
+import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
-import { AccessibilityScanner, WCAG_LEVELS } from './scanner.js';
+import { scanUrl, summarize } from './scanner.js';
+import { generateReportHtml, htmlToPdf } from './report.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const ROOT = path.join(__dirname, '..');
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const REPORTS_DIR = path.join(ROOT, 'reports');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
-app.use('/reports', express.static(path.join(__dirname, '../reports')));
+app.use(express.static(PUBLIC_DIR));
+app.use('/reports', express.static(REPORTS_DIR));
 
-// Store active scans
-const activeScans = new Map();
+function normalizeUrl(input) {
+  let u = String(input || '').trim();
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try {
+    return new URL(u).href;
+  } catch {
+    return null;
+  }
+}
 
-// API Routes
-app.get('/api/wcag-levels', (req, res) => {
-  res.json(WCAG_LEVELS);
-});
+function slugify(url) {
+  try {
+    return new URL(url).hostname.replace(/[^a-z0-9.-]/gi, '_');
+  } catch {
+    return 'report';
+  }
+}
+
+async function clearOldReports() {
+  await fs.mkdir(REPORTS_DIR, { recursive: true });
+  const entries = await fs.readdir(REPORTS_DIR, { withFileTypes: true });
+  await Promise.all(
+    entries
+      .filter((e) => e.isFile())
+      .map((e) => fs.unlink(path.join(REPORTS_DIR, e.name)).catch(() => {}))
+  );
+}
 
 app.post('/api/scan', async (req, res) => {
-  const { url, level = 'AA', maxPages = 50 } = req.body;
-
+  const url = normalizeUrl(req.body?.url);
   if (!url) {
-    return res.status(400).json({ error: 'URL is required' });
+    return res.status(400).json({ error: 'Please provide a valid URL.' });
   }
 
-  if (!['A', 'AA', 'AAA'].includes(level)) {
-    return res.status(400).json({ error: 'Invalid WCAG level. Must be A, AA, or AAA' });
-  }
-
-  const scanId = `scan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Initialize scan status
-  activeScans.set(scanId, {
-    status: 'running',
-    progress: 0,
-    pagesScanned: 0,
-    maxPages,
-    startTime: new Date().toISOString()
-  });
-
-  res.json({ scanId, message: 'Scan started' });
-
-  // Run scan in background
   try {
-    const scanner = new AccessibilityScanner({
-      url,
-      level,
-      maxPages,
-      outputDir: './reports'
-    });
+    const scan = await scanUrl(url);
+    const summary = summarize(scan);
 
-    await scanner.init();
-    
-    // Update progress callback would go here in a more sophisticated implementation
-    await scanner.crawlSite();
+    const html = generateReportHtml(scan);
 
-    const pdfPath = await scanner.generatePDFReport();
-    const jsonPath = await scanner.generateJSONReport();
-    const summary = scanner.generateSummary();
+    await clearOldReports();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const base = `${slugify(url)}-${stamp}`;
+    const pdfFile = `${base}.pdf`;
 
-    await scanner.close();
+    // PDF generation is best-effort; never fail the whole scan on it.
+    let pdfUrl = null;
+    try {
+      await htmlToPdf(html, path.join(REPORTS_DIR, pdfFile));
+      pdfUrl = `/reports/${pdfFile}`;
+    } catch (e) {
+      console.warn('PDF generation failed:', e.message);
+    }
 
-    activeScans.set(scanId, {
-      status: 'complete',
-      progress: 100,
-      pagesScanned: summary.totalPages,
-      maxPages,
-      startTime: activeScans.get(scanId).startTime,
-      endTime: new Date().toISOString(),
+    res.json({
+      ok: true,
+      url: scan.url,
+      finalUrl: scan.finalUrl,
+      title: scan.title,
+      level: scan.level,
+      engines: scan.engines,
       summary,
-      reports: {
-        pdf: pdfPath,
-        json: jsonPath
-      }
+      reportPdfUrl: pdfUrl
     });
-
-  } catch (error) {
-    activeScans.set(scanId, {
-      status: 'error',
-      error: error.message,
-      startTime: activeScans.get(scanId).startTime,
-      endTime: new Date().toISOString()
+  } catch (err) {
+    console.error('Scan failed:', err);
+    res.status(500).json({
+      error: `Scan failed: ${err.message}`
     });
   }
 });
 
-app.get('/api/scan/:scanId', (req, res) => {
-  const { scanId } = req.params;
-  const scan = activeScans.get(scanId);
-
-  if (!scan) {
-    return res.status(404).json({ error: 'Scan not found' });
-  }
-
-  res.json(scan);
-});
-
-app.get('/api/scans', (req, res) => {
-  const scans = Array.from(activeScans.entries()).map(([id, data]) => ({
-    id,
-    ...data
-  }));
-  res.json(scans);
-});
-
-// Serve frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
-});
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`
-╔═══════════════════════════════════════════════════════════════╗
-║           Accessibility Scanner Server                         ║
-║           Running on http://localhost:${PORT}                      ║
-╚═══════════════════════════════════════════════════════════════╝
-  `);
+  console.log(`\n  Accessibility Scanner running:  http://localhost:${PORT}\n`);
 });

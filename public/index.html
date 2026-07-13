@@ -1,330 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Accessibility Scanner - WCAG Compliance Audit Tool</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♿</text></svg>">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Accessibility Scanner — WCAG 2.0 AA</title>
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="header">
-    <div class="container">
-      <div class="logo">
-        <span class="logo-icon">♿</span>
-        <h1>Accessibility Scanner</h1>
-      </div>
-      <nav class="nav">
-        <a href="#scanner" class="nav-link active">Scanner</a>
-        <a href="#reports" class="nav-link">Reports</a>
-        <a href="#guidelines" class="nav-link">Guidelines</a>
-        <a href="#about" class="nav-link">About</a>
-      </nav>
-    </div>
-  </header>
+  <main class="container">
+    <header class="hero">
+      <h1>Accessibility Scanner</h1>
+      <p>Enter any website URL to scan it against the <strong>WCAG 2.0 AA</strong> standard and generate a downloadable report.</p>
+    </header>
 
-  <main>
-    <!-- Hero Section -->
-    <section class="hero">
-      <div class="container">
-        <h2>WCAG Compliance Testing Made Simple</h2>
-        <p>Scan your website for accessibility issues against WCAG 2.0/2.1 standards. Get detailed reports with actionable recommendations.</p>
-      </div>
-    </section>
+    <div class="search-label" aria-hidden="true">Accessibility</div>
+    <form id="scan-form" class="scan-box">
+      <input
+        id="url"
+        type="text"
+        placeholder="Search"
+        aria-label="Website URL to validate"
+        autocomplete="off"
+        spellcheck="false"
+        required
+      />
+      <button id="scan-btn" type="submit">Validate</button>
+    </form>
 
-    <!-- Scanner Section -->
-    <section id="scanner" class="section scanner-section">
-      <div class="container">
-        <div class="card scanner-card">
-          <h3>Start Accessibility Scan</h3>
-          
-          <form id="scanForm" class="scan-form">
-            <div class="form-group">
-              <label for="url">Website URL</label>
-              <input 
-                type="url" 
-                id="url" 
-                name="url" 
-                placeholder="https://example.com" 
-                required
-                aria-describedby="url-help"
-              >
-              <small id="url-help">Enter the full URL of the website you want to scan</small>
-            </div>
+    <section id="status" class="status hidden"></section>
 
-            <div class="form-group">
-              <label for="level">WCAG Compliance Level</label>
-              <select id="level" name="level" aria-describedby="level-help">
-                <option value="A">Level A - Minimum Accessibility</option>
-                <option value="AA" selected>Level AA - Standard (Recommended)</option>
-                <option value="AAA">Level AAA - Enhanced Accessibility</option>
-              </select>
-              <small id="level-help">
-                <strong>Level A:</strong> Basic accessibility requirements<br>
-                <strong>Level AA:</strong> Industry standard, required by most regulations<br>
-                <strong>Level AAA:</strong> Highest level of accessibility
-              </small>
-            </div>
-
-            <div class="form-group">
-              <label for="engine">Scanning Engine</label>
-              <select id="engine" name="engine" aria-describedby="engine-help">
-                <option value="both" selected>Both Engines (Recommended)</option>
-                <option value="axe">axe-core Only</option>
-                <option value="siteimprove">Siteimprove Alfa Only</option>
-              </select>
-              <small id="engine-help">
-                <strong>axe-core:</strong> Industry-standard accessibility testing by Deque<br>
-                <strong>Siteimprove Alfa:</strong> Advanced rule-based testing with deep WCAG coverage<br>
-                <strong>Both:</strong> Comprehensive coverage using both engines
-              </small>
-            </div>
-
-            <div class="form-group">
-              <label for="maxPages">Maximum Pages to Scan</label>
-              <input 
-                type="number" 
-                id="maxPages" 
-                name="maxPages" 
-                value="50" 
-                min="1" 
-                max="500"
-                aria-describedby="pages-help"
-              >
-              <small id="pages-help">Limit the number of pages to crawl (1-500)</small>
-            </div>
-
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" id="startScan">
-                <span class="btn-icon">🔍</span>
-                Start Scan
-              </button>
-              <button type="button" class="btn btn-secondary" id="sampleScan">
-                Try Sample Scan
-              </button>
-            </div>
-          </form>
-
-          <!-- Progress Section -->
-          <div id="progressSection" class="progress-section hidden">
-            <h4>Scan in Progress</h4>
-            <div class="progress-bar">
-              <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-            </div>
-            <p class="progress-text" id="progressText">Initializing scanner...</p>
-            <div class="scan-stats" id="scanStats">
-              <span>Pages scanned: <strong id="pagesScanned">0</strong></span>
-              <span>Issues found: <strong id="issuesFound">0</strong></span>
-            </div>
-          </div>
+    <section id="results" class="results hidden">
+      <div class="result-head">
+        <div>
+          <h2 id="result-title">Results</h2>
+          <a id="result-url" class="result-url" href="#" target="_blank" rel="noopener"></a>
         </div>
-
-        <!-- Results Section -->
-        <div id="resultsSection" class="results-section hidden">
-          <div class="card results-card">
-            <div class="results-header">
-              <h3>Scan Results</h3>
-              <div class="results-actions">
-                <button class="btn btn-outline" id="downloadPDF">
-                  📄 Download PDF
-                </button>
-                <button class="btn btn-outline" id="downloadJSON">
-                  📋 Download JSON
-                </button>
-              </div>
-            </div>
-
-            <!-- Summary Cards -->
-            <div class="summary-grid">
-              <div class="summary-card">
-                <div class="summary-icon">📊</div>
-                <div class="summary-value" id="complianceScore">--%</div>
-                <div class="summary-label">Compliance Score</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-icon">📄</div>
-                <div class="summary-value" id="totalPages">--</div>
-                <div class="summary-label">Pages Scanned</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-icon">⚠️</div>
-                <div class="summary-value" id="totalViolations">--</div>
-                <div class="summary-label">Total Issues</div>
-              </div>
-              <div class="summary-card">
-                <div class="summary-icon">✅</div>
-                <div class="summary-value" id="totalPasses">--</div>
-                <div class="summary-label">Tests Passed</div>
-              </div>
-            </div>
-
-            <!-- Impact Breakdown -->
-            <div class="impact-section">
-              <h4>Issues by Impact Level</h4>
-              <div class="impact-grid">
-                <div class="impact-item critical">
-                  <span class="impact-label">Critical</span>
-                  <span class="impact-value" id="criticalCount">0</span>
-                </div>
-                <div class="impact-item serious">
-                  <span class="impact-label">Serious</span>
-                  <span class="impact-value" id="seriousCount">0</span>
-                </div>
-                <div class="impact-item moderate">
-                  <span class="impact-label">Moderate</span>
-                  <span class="impact-value" id="moderateCount">0</span>
-                </div>
-                <div class="impact-item minor">
-                  <span class="impact-label">Minor</span>
-                  <span class="impact-value" id="minorCount">0</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Top Issues -->
-            <div class="issues-section">
-              <h4>Top Accessibility Issues</h4>
-              <div class="issues-list" id="issuesList">
-                <!-- Issues will be populated here -->
-              </div>
-            </div>
-
-            <!-- Page Results -->
-            <div class="pages-section">
-              <h4>Results by Page</h4>
-              <div class="pages-list" id="pagesList">
-                <!-- Page results will be populated here -->
-              </div>
-            </div>
-          </div>
+        <div class="result-actions">
+          <a id="download-pdf" class="btn btn-primary" target="_blank" rel="noopener">Download Enhanced PDF</a>
         </div>
       </div>
-    </section>
 
-    <!-- Guidelines Section -->
-    <section id="guidelines" class="section guidelines-section">
-      <div class="container">
-        <h3>WCAG Compliance Levels Explained</h3>
-        
-        <div class="guidelines-grid">
-          <div class="guideline-card level-a">
-            <div class="guideline-header">
-              <h4>Level A</h4>
-              <span class="badge">Minimum</span>
-            </div>
-            <p>The most basic web accessibility features. Without Level A conformance, some users will find it impossible to access your content.</p>
-            <ul>
-              <li>Non-text content has text alternatives</li>
-              <li>Captions for prerecorded audio</li>
-              <li>Info and relationships conveyed through presentation can be programmatically determined</li>
-              <li>Use of color is not the only visual means of conveying information</li>
-              <li>All functionality available from a keyboard</li>
-            </ul>
-          </div>
-
-          <div class="guideline-card level-aa">
-            <div class="guideline-header">
-              <h4>Level AA</h4>
-              <span class="badge recommended">Recommended</span>
-            </div>
-            <p>Deals with the biggest barriers for disabled users. This is the level most regulations require and is recommended for most websites.</p>
-            <ul>
-              <li>Captions for live audio</li>
-              <li>Audio descriptions for prerecorded video</li>
-              <li>Minimum contrast ratio of 4.5:1 for text</li>
-              <li>Text can be resized up to 200%</li>
-              <li>Images of text are avoided where possible</li>
-              <li>Multiple ways to navigate the site</li>
-              <li>Headings and labels are descriptive</li>
-              <li>Focus is visible</li>
-              <li>Language of page parts can be determined</li>
-              <li>Consistent navigation and identification</li>
-              <li>Error prevention for legal/financial submissions</li>
-            </ul>
-          </div>
-
-          <div class="guideline-card level-aaa">
-            <div class="guideline-header">
-              <h4>Level AAA</h4>
-              <span class="badge">Enhanced</span>
-            </div>
-            <p>The highest level of accessibility. Not required for entire sites, but recommended for specific content where possible.</p>
-            <ul>
-              <li>Sign language for prerecorded audio</li>
-              <li>Extended audio descriptions</li>
-              <li>Enhanced contrast ratio of 7:1</li>
-              <li>No background audio or can be turned off</li>
-              <li>Visual presentation has specific requirements</li>
-              <li>Reading level considerations</li>
-              <li>Pronunciation information available</li>
-              <li>Interruptions can be postponed</li>
-              <li>Re-authentication maintains data</li>
-              <li>Help is available in multiple ways</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Reports Section -->
-    <section id="reports" class="section reports-section">
-      <div class="container">
-        <h3>Previous Scan Reports</h3>
-        <div class="reports-list" id="reportsList">
-          <p class="no-reports">No previous scans found. Start a new scan to generate reports.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- About Section -->
-    <section id="about" class="section about-section">
-      <div class="container">
-        <h3>About This Tool</h3>
-        <div class="about-content">
-          <p>This accessibility scanner uses <strong>axe-core</strong>, the world's most trusted accessibility testing engine, to identify WCAG violations across your website.</p>
-          
-          <h4>Features</h4>
-          <ul>
-            <li><strong>Full Site Crawling:</strong> Automatically discovers and scans all pages on your site</li>
-            <li><strong>WCAG 2.0/2.1 Testing:</strong> Tests against Level A, AA, and AAA criteria</li>
-            <li><strong>Detailed Reports:</strong> PDF and JSON reports with actionable recommendations</li>
-            <li><strong>Impact Analysis:</strong> Issues categorized by severity (Critical, Serious, Moderate, Minor)</li>
-          </ul>
-
-          <h4>How to Use</h4>
-          <ol>
-            <li>Enter the URL of the website you want to scan</li>
-            <li>Select the WCAG compliance level (AA is recommended)</li>
-            <li>Set the maximum number of pages to scan</li>
-            <li>Click "Start Scan" and wait for the results</li>
-            <li>Review the issues and download the PDF report</li>
-          </ol>
-
-          <h4>Limitations</h4>
-          <p>Automated testing can detect approximately 30-40% of accessibility issues. Manual testing with assistive technologies is recommended for comprehensive accessibility audits.</p>
-
-          <h4>Compliance Frameworks</h4>
-          <p>This tool helps you meet requirements for:</p>
-          <ul>
-            <li>WCAG 2.0 / WCAG 2.1 Web Content Accessibility Guidelines</li>
-            <li>Section 508 (US Federal agencies)</li>
-            <li>ADA (Americans with Disabilities Act)</li>
-            <li>EN 301 549 (European accessibility standard)</li>
-          </ul>
-        </div>
-      </div>
+      <div class="cards" id="cards"></div>
     </section>
   </main>
-
-  <footer class="footer">
-    <div class="container">
-      <p>&copy; 2024 Accessibility Scanner. Built for inclusive web experiences.</p>
-      <p class="footer-links">
-        <a href="https://www.w3.org/WAI/WCAG21/quickref/" target="_blank" rel="noopener">WCAG Quick Reference</a>
-        <a href="https://www.deque.com/axe/" target="_blank" rel="noopener">Powered by axe-core</a>
-      </p>
-    </div>
-  </footer>
 
   <script src="app.js"></script>
 </body>
